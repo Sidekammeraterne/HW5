@@ -96,16 +96,14 @@ func main() {
 		role: cfg.Role,
 	}
 
-	if server.role == "leader" {
-		auction := AuctionState{
-			duration:       100,
-			auctionClosed:  false,
-			highestBid:     0,
-			highestBidder:  0,
-			registeredBids: make(map[int32]bool),
-		}
-		server.state = &auction
+	auction := AuctionState{
+		duration:       100,
+		auctionClosed:  false,
+		highestBid:     0,
+		highestBidder:  0,
+		registeredBids: make(map[int32]bool),
 	}
+	server.state = &auction
 
 	if server.role == "leader" {
 		// Make client connection to the other server
@@ -114,7 +112,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("Not working")
 		}
-		server.backup = proto.NewAuctionClient(conn)
+		client := proto.NewAuctionClient(conn)
+		server.backup = client
 	}
 
 	server.startServer(cfg.Port)
