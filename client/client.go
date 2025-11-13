@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -114,8 +113,8 @@ func (c *Client) listenCommands() {
 func (c *Client) Bid(amount int32) error {
 	c.incrementLamport()
 	//todo: timeout?
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+	//ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	//defer cancel()
 
 	//proto message
 	req := &proto.Amount{
@@ -124,8 +123,9 @@ func (c *Client) Bid(amount int32) error {
 		Lamport: c.Lamport, //lamport
 	}
 	//send rpc
-	response, err := c.Server.Bid(ctx, req)
+	response, err := c.Server.Bid(context.Background(), req)
 	if err != nil {
+		log.Printf("Server not responding: %v", err)
 		return err
 	}
 	//update local lamport from server reply

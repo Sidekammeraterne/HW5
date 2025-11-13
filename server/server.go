@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type AuctionServer struct {
@@ -39,11 +40,13 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 	s.updateLamportOnReceive(in.Lamport)
 	if s.state.auctionClosed {
 		log.Printf("Bid by %v of %d caused exception as the auction is closed", in.Id, in.Amount)
+		//todo: might need to update leader here also - det kommer an på en prøve
 		return &proto.Ack{Outcome: "exception"}, nil
 	}
 
 	if in.Amount < s.state.highestBid {
 		log.Printf("Bid by %v of %d fail as it was not a valid bid", in.Id, in.Amount)
+		//todo: might need to update leader here also - det kommer an på en prøve
 		return &proto.Ack{Outcome: "fail"}, nil
 	}
 
@@ -54,6 +57,7 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 
 	// Update backups if leader
 	if s.role == "leader" {
+		s.incrementLamport()
 		Ack, err := s.backup.Bid(ctx, in)
 		if err != nil {
 			log.Fatalf("Did not work: %v", err)
@@ -85,7 +89,13 @@ func main() {
 		server.state = &auction
 	}
 
-	//todo: make client connection to the other server
+	// Make client connection to the other server
+	clientAddress := "localhost" + cfg.OtherServerPort
+	conn, err := grpc.NewClient(clientAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Not working")
+	}
+	server.backup = proto.NewAuctionClient(conn)
 
 	server.startServer()
 }
