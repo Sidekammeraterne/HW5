@@ -1,0 +1,23 @@
+syntax = "proto3";
+option go_package = "HW5/grpc/proto";
+
+message Amount{
+  int32 amount = 1;
+}
+
+message Ack{
+  string outcome = 1; //fail, success or exception
+}
+
+message Empty{}
+
+message Outcome{
+  int32 id = 1;
+  int32 highestBid = 2;
+  bool actionClosed= 3;
+}
+
+service Auction{
+  rpc Bid (Amount) returns (Ack);
+  rpc Result (Empty) returns (Outcome);
+}
