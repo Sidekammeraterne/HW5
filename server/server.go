@@ -3,6 +3,7 @@ package main
 import (
 	proto "AuctionServer/grpc"
 	"context"
+	"flag"
 	"log"
 	"net"
 
@@ -13,13 +14,26 @@ import (
 type AuctionServer struct {
 	proto.UnimplementedAuctionServer
 
-	id     int    //todo: maybe not used?
 	role   string // the role of the server, leader or backup
 	backup proto.AuctionClient
 	//other servers??? Yes I believe so
 
 	state   *AuctionState
 	lamport int32
+}
+
+type Config struct {
+	Role            string //leader or backup
+	Port            string //:xxxx
+	OtherServerPort string //localhost:xxxx
+}
+
+func parseConfig() Config {
+	role := flag.String("role", "leader", "server role")
+	port := flag.String("port", ":8080", "listen address")
+	other := flag.String("otherServer", "", "other address")
+	flag.Parse()
+	return Config{*role, *port, *other}
 }
 
 //we need N server nodes - min 2
@@ -76,7 +90,11 @@ func (s *AuctionServer) Result(ctx context.Context, in *proto.Empty) (*proto.Out
 }
 
 func main() {
-	server := &AuctionServer{} //todo: set server properties, role should be given in the terminal
+	cfg := parseConfig()
+
+	server := &AuctionServer{
+		role: cfg.Role,
+	}
 
 	if server.role == "leader" {
 		auction := AuctionState{
@@ -97,12 +115,12 @@ func main() {
 	}
 	server.backup = proto.NewAuctionClient(conn)
 
-	server.startServer()
+	server.startServer(cfg.Port)
 }
 
-func (s *AuctionServer) startServer() {
+func (s *AuctionServer) startServer(port string) {
 	grpcServer := grpc.NewServer()
-	listner, err := net.Listen("tcp", ":8080") //todo: fix hardcoded port
+	listner, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}

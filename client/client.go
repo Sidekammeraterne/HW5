@@ -26,34 +26,54 @@ type Client struct {
 	Lamport int32
 }
 
-func main() {
-	//Flags
-	addrFlag := flag.String("addr", "localhost:5050", "the auction address") //defaulting to port 5050
-	idFlag := flag.Int("id", 1, "the bidder/client ID")                      //defaults to id
+type Config struct {
+	ID      int32
+	Servers []string
+}
+
+func parseConfig() Config {
+	id := flag.Int("id", 1, "bidder ID")
+	servers := flag.String("servers", ":8081", "comma separated list of servers")
 	flag.Parse()
 
+	var serverList []string
+	if *servers != "" {
+		serverList = strings.Split(*servers, ",")
+	}
+
+	return Config{
+		ID:      int32(*id),
+		Servers: serverList,
+	}
+}
+func main() {
+	cfg := parseConfig()
+
+	//try first server
+	addr := cfg.Servers[0]
+
 	//Connecting to server
-	conn, err := grpc.NewClient(*addrFlag, grpc.WithTransportCredentials(insecure.NewCredentials())) //todo: obs. hardoded port
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	//creates a new instance of the object client
 	c := Client{
-		ID:     int32(*idFlag),
+		ID:     cfg.ID,
 		Server: proto.NewAuctionClient(conn),
 	}
 
-	fmt.Printf("Connected to auction as client %d", c.ID)
+	fmt.Printf("Connected to auction as client %d on server %s", c.ID, addr)
 	fmt.Println("Commands: bid <amount> | result | quit") //what the user can type into terminal
 
 	//start listening for commands in terminal
-	c.listenCommands() //todo: like in ChitChat
+	c.listenCommands()
 }
 
 func (c *Client) incrementLamport() {
 	c.Lamport++
 }
-func (c *Client) updateLamortOnReceive(remote int32) {
+func (c *Client) updateLamportOnReceive(remote int32) {
 	if remote > c.Lamport {
 		c.Lamport = remote
 	}
@@ -129,7 +149,7 @@ func (c *Client) Bid(amount int32) error {
 		return err
 	}
 	//update local lamport from server reply
-	c.updateLamortOnReceive(response.GetLamport())
+	c.updateLamportOnReceive(response.GetLamport())
 	fmt.Printf("Bid %d from client %d had outcome %s\n", amount, c.ID, response.GetOutcome())
 	return nil
 }
@@ -143,7 +163,7 @@ func (c *Client) Result() error {
 		return err
 	}
 
-	c.updateLamortOnReceive(response.GetLamport())
+	c.updateLamportOnReceive(response.GetLamport())
 
 	status := "open"
 	if response.GetActionClosed() {
