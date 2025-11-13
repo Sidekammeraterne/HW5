@@ -47,7 +47,7 @@ type AuctionState struct {
 
 	highestBid     int32
 	highestBidder  int32
-	registeredBids map[int32]bool //set bidderID to true? todo: should be registeredBidders
+	registeredBids map[int32]bool //set bidderID to true? todo: should be registeredBidders as it is a map of the bidders ID's?
 }
 
 func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, error) {
