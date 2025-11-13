@@ -107,13 +107,15 @@ func main() {
 		server.state = &auction
 	}
 
-	// Make client connection to the other server
-	clientAddress := "localhost" + cfg.OtherServerPort
-	conn, err := grpc.NewClient(clientAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Not working")
+	if server.role == "leader" {
+		// Make client connection to the other server
+		clientAddress := "localhost" + cfg.OtherServerPort
+		conn, err := grpc.NewClient(clientAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("Not working")
+		}
+		server.backup = proto.NewAuctionClient(conn)
 	}
-	server.backup = proto.NewAuctionClient(conn)
 
 	server.startServer(cfg.Port)
 }
