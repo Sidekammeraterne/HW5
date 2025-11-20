@@ -13,12 +13,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	proto "AuctionServer/grpc"
 )
-
-//needs to know who the leader server is (or maybe all)
-//sending bid(amount) to server
 
 // represents a bidder in the auction, holding ID and the gRPC used to call RPC methods on the server
 type Client struct {
@@ -68,7 +66,7 @@ func main() {
 		AmountOfBids: 0,
 	}
 
-	fmt.Printf("Connected to auction as client %d on server %s", c.ID, addr)
+	fmt.Printf("Connected to auction as client %d on server %s \n", c.ID, addr)
 	fmt.Println("Commands: bid <amount> | result | quit") //what the user can type into terminal
 
 	//start listening for commands in terminal
@@ -119,7 +117,7 @@ func (c *Client) listenCommands() {
 			if err := c.Bid(int32(amountInt)); err != nil {
 				fmt.Println("error in bid", err)
 			}
-			//todo: other failure cases?
+
 		case "result":
 			//get auction result
 			if err := c.Result(); err != nil {
@@ -149,14 +147,19 @@ func (c *Client) Bid(amount int32) error {
 		Lamport:      c.Lamport,      //lamport
 		AmountOfBids: c.AmountOfBids, //amount of bids
 	}
+
+	//meta data
+	md := metadata.Pairs("source", "client")
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
 	//send rpc
 	response, err := c.Server.Bid(ctx, req)
 	if err != nil {
 		log.Printf("Server not responding")
 		c.LeaderNotResponding()
+
 		log.Printf("Trying backup")
-		response, err := c.Server.Bid(ctx, req)
-		response = response
+		response, err = c.Server.Bid(ctx, req)
 		if err != nil {
 			log.Printf("No servers not responding: %v", err)
 			c.AmountOfBids--
@@ -165,7 +168,7 @@ func (c *Client) Bid(amount int32) error {
 
 	}
 	//update local lamport from server reply
-	c.updateLamportOnReceive(response.GetLamport())
+	c.updateLamportOnReceive(response.Lamport)
 	fmt.Printf("Bid %d from client %d had outcome %s\n", amount, c.ID, response.GetOutcome())
 	return nil
 }
@@ -173,18 +176,33 @@ func (c *Client) Bid(amount int32) error {
 // get state of auction from server, get highest bid or result
 func (c *Client) Result() error {
 	c.incrementLamport()
-	response, err := c.Server.Result(context.Background(), &proto.Empty{})
+
+	//meta data
+	md := metadata.Pairs("source", "client")
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	//send rpc
+	response, err := c.Server.Result(ctx, &proto.Empty{})
 	if err != nil {
-		return err
+		log.Printf("Server not responding")
+		c.LeaderNotResponding()
+
+		log.Printf("Trying backup")
+		response, err = c.Server.Result(context.Background(), &proto.Empty{})
+		if err != nil {
+			log.Printf("No servers not responding: %v", err)
+			c.AmountOfBids--
+			return err
+		}
 	}
 
-	c.updateLamportOnReceive(response.GetLamport())
+	c.updateLamportOnReceive(response.Lamport)
 
 	status := "open"
 	if response.GetActionClosed() {
 		status = "closed"
 	}
-	fmt.Printf("Result of auction -> highestBid=%d, bidderId=%d, auction=%s, lamport=%d \n", response.GetHighestBid(), response.GetId(), status, c.Lamport) //todo: i added a lamport into this print
+	fmt.Printf("Result of auction -> highestBid=%d, bidderId=%d, auction=%s \n", response.GetHighestBid(), response.GetId(), status)
 	return nil
 }
 

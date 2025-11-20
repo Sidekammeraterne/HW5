@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 type AuctionServer struct {
@@ -34,9 +35,6 @@ func parseConfig() Config {
 	return Config{*role, *port, *other}
 }
 
-//we need N server nodes - min 2
-//one leader at a time
-
 // holding replicated data
 type AuctionState struct {
 	duration      int32
@@ -47,10 +45,20 @@ type AuctionState struct {
 }
 
 func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, error) {
+	//check if call comes from leader or client
+	if s.role != "leader" {
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			val := md.Get("source")
+			if val[0] == "client" {
+				s.role = "leader"
+				log.Print("Changed state to leader")
+			}
+		}
+	}
+
 	s.updateLamportOnReceive(in.Lamport)
 	if s.state.auctionClosed {
 		log.Printf("Bid by %v of %d caused exception as the auction is closed", in.Id, in.Amount)
-		//	todo: might need to update leader here also - det kommer an på en prøve
 		return &proto.Ack{Outcome: "exception"}, nil
 	}
 
@@ -60,7 +68,6 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 
 	if in.Amount <= s.state.highestBid {
 		log.Printf("Bid by %v of %d fail as it was not a valid bid", in.Id, in.Amount)
-		//todo: might need to update leader here also - det kommer an på en prøve
 		return &proto.Ack{Outcome: "fail"}, nil
 	}
 
@@ -68,20 +75,30 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 	s.state.highestBid = in.Amount
 	log.Printf("Bid by %v of %d was successfully added to the Auction (time=%d)", in.Id, in.Amount, s.lamport)
 
-	// Update backups if leader
-	if s.role == "leader" {
+	// Update backup if leader
+	if s.role == "leader" && s.backup != nil {
 		s.incrementLamport()
-		Ack, err := s.backup.Bid(context.Background(), in)
-		if err != nil {
-			log.Fatalf("Did not work: %v", err)
+		//meta data
+		md := metadata.Pairs("source", "leader")
+		ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+		//construct update
+		req := &proto.Amount{
+			Id:           in.Id,           //bidder ID
+			Amount:       in.Amount,       //bid amount
+			Lamport:      s.lamport,       //lamport
+			AmountOfBids: in.AmountOfBids, //amount of bids
 		}
-		log.Printf("Acknowlegdement from backup was recieved with value: %v", Ack) //todo: change or delete
+
+		Ack, err := s.backup.Bid(ctx, req)
+		if err != nil {
+			log.Printf("Backup is not responding")
+			s.backup = nil
+		}
+		log.Printf("Ack from backup was recieved: %v", Ack)
 	}
 
 	s.incrementLamport()
-	if s.lamport >= s.state.duration {
-		log.Printf("Client %v is the winner of the auction with the bid being %d (time=%d)", in.Id, in.Amount, s.lamport) //todo: can be deleted
-	}
 	return &proto.Ack{Outcome: "success"}, nil
 }
 
@@ -124,7 +141,7 @@ func main() {
 
 func (s *AuctionServer) startServer(port string) {
 	grpcServer := grpc.NewServer()
-	listner, err := net.Listen("tcp", port)
+	listener, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -132,7 +149,7 @@ func (s *AuctionServer) startServer(port string) {
 	proto.RegisterAuctionServer(grpcServer, s)
 
 	log.Printf("Auction server listening on port %v (time=%d)", port, s.lamport)
-	err = grpcServer.Serve(listner)
+	err = grpcServer.Serve(listener)
 	if err != nil {
 		log.Fatalf("Did not work: %v", err)
 	}
@@ -160,12 +177,3 @@ func (s *AuctionServer) incrementLamport() {
 	s.lamport++
 	s.checkLamport()
 }
-
-//what needs to happen:
-//registered bidders, current highest bid and who made the bid
-//some kind of time, 100 time units, from starting the program - Done (not tested)
-
-//BACKUP: replicate state from the leader
-//if leader fails (figured out using timeout)?
-//backup promotes itself to leader
-//other backups now replicate the new leader
