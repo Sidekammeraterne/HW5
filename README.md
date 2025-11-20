@@ -3,10 +3,10 @@ This repository is for Distributed System Homework 5
 
 In each their own terminals, write:
 
-#leader
+# leader
 go run ./server -role=leader -port=":8080" -otherServer="localhost:8081"
 
-#backup
+# backup
 go run ./server -role=backup -port=":8081" -otherServer="localhost:8080"
 
 # client 1
