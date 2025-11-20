@@ -55,7 +55,11 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 		return &proto.Ack{Outcome: "exception"}, nil
 	}
 
-	if in.Amount < s.state.highestBid {
+	if in.AmountOfBids == 1 {
+		log.Printf("Bidder %v is registered and can now bid (time=%d)", in.Id, s.lamport)
+	}
+
+	if in.Amount <= s.state.highestBid {
 		log.Printf("Bid by %v of %d fail as it was not a valid bid", in.Id, in.Amount)
 		//todo: might need to update leader here also - det kommer an på en prøve
 		return &proto.Ack{Outcome: "fail"}, nil
@@ -77,6 +81,9 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 	}
 
 	s.incrementLamport()
+	if s.lamport >= s.state.duration {
+		log.Printf("Client %v is the winner of the auction with the bid being %d (time=%d)", in.Id, in.Amount, s.lamport) //todo: can be deleted
+	}
 	return &proto.Ack{Outcome: "success"}, nil
 }
 
