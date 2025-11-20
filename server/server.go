@@ -39,7 +39,6 @@ func parseConfig() Config {
 
 // holding replicated data
 type AuctionState struct {
-	//todo: lock?
 	duration      int32
 	auctionClosed bool
 
@@ -51,7 +50,7 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 	s.updateLamportOnReceive(in.Lamport)
 	if s.state.auctionClosed {
 		log.Printf("Bid by %v of %d caused exception as the auction is closed", in.Id, in.Amount)
-		//todo: might need to update leader here also - det kommer an på en prøve
+		//	todo: might need to update leader here also - det kommer an på en prøve
 		return &proto.Ack{Outcome: "exception"}, nil
 	}
 
@@ -65,10 +64,9 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 		return &proto.Ack{Outcome: "fail"}, nil
 	}
 
-	s.state.registeredBids[in.Id] = true
 	s.state.highestBidder = in.Id
 	s.state.highestBid = in.Amount
-	log.Printf("Bid by %v of %d was successfully added to the Auction", in.Id, in.Amount)
+	log.Printf("Bid by %v of %d was successfully added to the Auction (time=%d)", in.Id, in.Amount, s.lamport)
 
 	// Update backups if leader
 	if s.role == "leader" {
@@ -77,7 +75,7 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 		if err != nil {
 			log.Fatalf("Did not work: %v", err)
 		}
-		log.Printf("Acknowlegdement from backup was recieved with value: %v", Ack)
+		log.Printf("Acknowlegdement from backup was recieved with value: %v", Ack) //todo: change or delete
 	}
 
 	s.incrementLamport()

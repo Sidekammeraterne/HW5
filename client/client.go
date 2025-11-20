@@ -173,7 +173,6 @@ func (c *Client) Bid(amount int32) error {
 // get state of auction from server, get highest bid or result
 func (c *Client) Result() error {
 	c.incrementLamport()
-	//todo: timeout?
 	response, err := c.Server.Result(context.Background(), &proto.Empty{})
 	if err != nil {
 		return err
@@ -185,7 +184,7 @@ func (c *Client) Result() error {
 	if response.GetActionClosed() {
 		status = "closed"
 	}
-	fmt.Printf("Result of auction -> highestBid=%d, winnerId=%d, auction=%s \n", response.GetHighestBid(), response.GetId(), status)
+	fmt.Printf("Result of auction -> highestBid=%d, bidderId=%d, auction=%s, lamport=%d \n", response.GetHighestBid(), response.GetId(), status, c.Lamport) //todo: i added a lamport into this print
 	return nil
 }
 
