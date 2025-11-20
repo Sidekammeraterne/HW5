@@ -14,10 +14,8 @@ import (
 type AuctionServer struct {
 	proto.UnimplementedAuctionServer
 
-	role   string // the role of the server, leader or backup
-	backup proto.AuctionClient
-	//other servers??? Yes I believe so
-
+	role    string // the role of the server, leader or backup
+	backup  proto.AuctionClient
 	state   *AuctionState
 	lamport int32
 }
@@ -45,9 +43,8 @@ type AuctionState struct {
 	duration      int32
 	auctionClosed bool
 
-	highestBid     int32
-	highestBidder  int32
-	registeredBids map[int32]bool //set bidderID to true? todo: should be registeredBidders as it is a map of the bidders ID's?
+	highestBid    int32
+	highestBidder int32
 }
 
 func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, error) {
@@ -72,7 +69,7 @@ func (s *AuctionServer) Bid(ctx context.Context, in *proto.Amount) (*proto.Ack, 
 	// Update backups if leader
 	if s.role == "leader" {
 		s.incrementLamport()
-		Ack, err := s.backup.Bid(ctx, in)
+		Ack, err := s.backup.Bid(context.Background(), in)
 		if err != nil {
 			log.Fatalf("Did not work: %v", err)
 		}
@@ -97,23 +94,24 @@ func main() {
 	}
 
 	auction := AuctionState{
-		duration:       100,
-		auctionClosed:  false,
-		highestBid:     0,
-		highestBidder:  0,
-		registeredBids: make(map[int32]bool),
+		duration:      50,
+		auctionClosed: false,
+		highestBid:    0,
+		highestBidder: 0,
 	}
 	server.state = &auction
 
 	if server.role == "leader" {
 		// Make client connection to the other server
-		clientAddress := "localhost" + cfg.OtherServerPort
+		clientAddress := cfg.OtherServerPort
 		conn, err := grpc.NewClient(clientAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		log.Printf("Connected to %v as ", clientAddress)
 		if err != nil {
 			log.Fatalf("Not working")
 		}
 		client := proto.NewAuctionClient(conn)
 		server.backup = client
+		log.Printf("Set backup to %v", server.backup)
 	}
 
 	server.startServer(cfg.Port)
@@ -128,6 +126,7 @@ func (s *AuctionServer) startServer(port string) {
 
 	proto.RegisterAuctionServer(grpcServer, s)
 
+	log.Printf("Auction server listening on port %v (time=%d)", port, s.lamport)
 	err = grpcServer.Serve(listner)
 	if err != nil {
 		log.Fatalf("Did not work: %v", err)

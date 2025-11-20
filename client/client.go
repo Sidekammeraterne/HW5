@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,9 +22,11 @@ import (
 
 // represents a bidder in the auction, holding ID and the gRPC used to call RPC methods on the server
 type Client struct {
-	ID      int32
-	Server  proto.AuctionClient
-	Lamport int32
+	ID           int32
+	Server       proto.AuctionClient
+	Backup       string
+	Lamport      int32
+	AmountOfBids int32
 }
 
 type Config struct {
@@ -59,8 +62,10 @@ func main() {
 	}
 	//creates a new instance of the object client
 	c := Client{
-		ID:     cfg.ID,
-		Server: proto.NewAuctionClient(conn),
+		ID:           cfg.ID,
+		Server:       proto.NewAuctionClient(conn),
+		Backup:       cfg.Servers[1],
+		AmountOfBids: 0,
 	}
 
 	fmt.Printf("Connected to auction as client %d on server %s", c.ID, addr)
@@ -132,9 +137,8 @@ func (c *Client) listenCommands() {
 // Sends a bid(amount) RPC to the server
 func (c *Client) Bid(amount int32) error {
 	c.incrementLamport()
-	//todo: timeout?
-	//ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	//defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	//proto message
 	req := &proto.Amount{
@@ -143,10 +147,19 @@ func (c *Client) Bid(amount int32) error {
 		Lamport: c.Lamport, //lamport
 	}
 	//send rpc
-	response, err := c.Server.Bid(context.Background(), req)
+	response, err := c.Server.Bid(ctx, req)
 	if err != nil {
-		log.Printf("Server not responding: %v", err)
-		return err
+		log.Printf("Server not responding")
+		c.LeaderNotResponding()
+		log.Printf("Trying backup")
+		response, err := c.Server.Bid(ctx, req)
+		response = response
+		if err != nil {
+			log.Printf("No servers not responding: %v", err)
+			c.AmountOfBids--
+			return err
+		}
+
 	}
 	//update local lamport from server reply
 	c.updateLamportOnReceive(response.GetLamport())
@@ -171,4 +184,17 @@ func (c *Client) Result() error {
 	}
 	fmt.Printf("Result of auction -> highestBid=%d, winnerId=%d, auction=%s \n", response.GetHighestBid(), response.GetId(), status)
 	return nil
+}
+
+func (c *Client) LeaderNotResponding() {
+	//Connecting to backup server
+	conn, err := grpc.NewClient(c.Backup, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	//Update server
+	c.Server = proto.NewAuctionClient(conn)
+
+	log.Printf("Server updated to %v", c.Backup)
 }

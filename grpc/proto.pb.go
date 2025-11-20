@@ -26,6 +26,7 @@ type Amount struct {
 	Id            int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Lamport       int32                  `protobuf:"varint,2,opt,name=lamport,proto3" json:"lamport,omitempty"`
 	Amount        int32                  `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	AmountOfBids  int32                  `protobuf:"varint,4,opt,name=amountOfBids,proto3" json:"amountOfBids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -77,6 +78,13 @@ func (x *Amount) GetLamport() int32 {
 func (x *Amount) GetAmount() int32 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *Amount) GetAmountOfBids() int32 {
+	if x != nil {
+		return x.AmountOfBids
 	}
 	return 0
 }
@@ -249,11 +257,12 @@ var File_proto_proto protoreflect.FileDescriptor
 
 const file_proto_proto_rawDesc = "" +
 	"\n" +
-	"\vproto.proto\"J\n" +
+	"\vproto.proto\"n\n" +
 	"\x06Amount\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\alamport\x18\x02 \x01(\x05R\alamport\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x05R\x06amount\"9\n" +
+	"\x06amount\x18\x03 \x01(\x05R\x06amount\x12\"\n" +
+	"\famountOfBids\x18\x04 \x01(\x05R\famountOfBids\"9\n" +
 	"\x03Ack\x12\x18\n" +
 	"\aoutcome\x18\x01 \x01(\tR\aoutcome\x12\x18\n" +
 	"\alamport\x18\x02 \x01(\x05R\alamport\"!\n" +
