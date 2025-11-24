@@ -182,13 +182,13 @@ func (c *Client) Result() error {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	//send rpc
-	response, err := c.Server.Result(ctx, &proto.Empty{})
+	response, err := c.Server.Result(ctx, &proto.Empty{Lamport: c.Lamport})
 	if err != nil {
 		log.Printf("Server not responding")
 		c.LeaderNotResponding()
 
 		log.Printf("Trying backup")
-		response, err = c.Server.Result(context.Background(), &proto.Empty{})
+		response, err = c.Server.Result(context.Background(), &proto.Empty{Lamport: c.Lamport})
 		if err != nil {
 			log.Printf("No servers not responding: %v", err)
 			c.AmountOfBids--
